@@ -120,15 +120,52 @@ Response:
 
 ### Manual Testing
 
-1. Publish test location data
+#### 1. Verify Data Flow
+
+**A. Check Publisher Sending Data**
 ```bash
-mosquitto_pub -h localhost -t "/fleet/vehicle/TEST001/location" \
-  -m '{"vehicle_id":"TEST001","latitude":-6.2088,"longitude":106.8456,"timestamp":1715003456}'
+docker logs fleet-publisher --tail=5
 ```
 
-2. Check latest location
+**B. Check Subscriber Receiving and Storing**
 ```bash
-curl http://localhost:8080/vehicles/TEST001/location
+docker logs fleet-subscriber --tail=5
+```
+
+**C. Verify Data in Database**
+```bash
+docker exec fleet-postgres psql -U fleet_user -d fleet_db -c "SELECT COUNT(*) FROM vehicle_locations;"
+```
+
+#### 2. Test API Endpoints
+
+**A. Latest Vehicle Location**
+```bash
+curl http://localhost:8080/vehicles/B1234XYZ/location | jq .
+```
+
+**B. Location History (Time Range)**
+```bash
+NOW=$(date +%s)
+PAST=$((NOW - 600))
+curl "http://localhost:8080/vehicles/B1234XYZ/history?start=$PAST&end=$NOW" | jq '. | length'
+```
+
+#### 3. Verify RabbitMQ & Worker
+
+**A. Check Exchange and Queue**
+```bash
+docker exec fleet-rabbitmq rabbitmqctl list_exchanges | grep fleet
+```
+
+**B. Check Queue and Consumer**
+```bash
+docker exec fleet-rabbitmq rabbitmqctl list_queues name consumers
+```
+
+**C. Check Worker Logs**
+```bash
+docker logs fleet-worker --tail=5
 ```
 
 
