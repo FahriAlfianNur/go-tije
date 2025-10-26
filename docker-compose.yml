@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: fleet-postgres
+    environment:
+      POSTGRES_USER: fleet_user
+      POSTGRES_PASSWORD: fleet_password
+      POSTGRES_DB: fleet_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - fleet-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fleet_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: fleet-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - fleet-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: fleet-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - fleet-network
+
+  api:
+    build: .
+    container_name: fleet-api
+    command: /app/api
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_PORT=8080
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=fleet_user
+      - DB_PASSWORD=fleet_password
+      - DB_NAME=fleet_db
+      - MQTT_BROKER=tcp://mosquitto:1883
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    networks:
+      - fleet-network
+    restart: unless-stopped
+
+  subscriber:
+    build: .
+    container_name: fleet-subscriber
+    command: /app/subscriber
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=fleet_user
+      - DB_PASSWORD=fleet_password
+      - DB_NAME=fleet_db
+      - MQTT_BROKER=tcp://mosquitto:1883
+      - MQTT_CLIENT_ID=fleet-subscriber
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=fleet.events
+      - RABBITMQ_QUEUE=geofence_alerts
+      - GEOFENCE_LAT=-6.203
+      - GEOFENCE_LON=106.843
+      - GEOFENCE_RADIUS=100
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    networks:
+      - fleet-network
+    restart: unless-stopped
+
+  publisher:
+    build: .
+    container_name: fleet-publisher
+    command: /app/publisher
+    environment:
+      - MQTT_BROKER=tcp://mosquitto:1883
+      - MQTT_CLIENT_ID=fleet-publisher
+    depends_on:
+      mosquitto:
+        condition: service_started
+    networks:
+      - fleet-network
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: fleet-worker
+    command: /app/worker
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=fleet.events
+      - RABBITMQ_QUEUE=geofence_alerts
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - fleet-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  mosquitto_data:
+  mosquitto_log:
+
+networks:
+  fleet-network:
+    driver: bridge

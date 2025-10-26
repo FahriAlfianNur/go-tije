@@ -1,0 +1,107 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		"name": "go-tije",
+		"description": "API collection for go-tije fleet management system - Vehicle Tracking API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Get Latest Location",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/vehicles/{{vehicleId}}/location",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"vehicles",
+						"{{vehicleId}}",
+						"location"
+					]
+				},
+				"description": "Get the latest location of a specific vehicle.\n\n**Parameters:**\n- `vehicleId`: The ID of the vehicle\n\n**Response:**\n- Success: Returns vehicle location with id, vehicle_id, latitude, longitude, timestamp, and created_at\n- Vehicle not found: Returns 404 with error message\n- Bad request: Returns 400 with error message"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Location History",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/vehicles/{{vehicleId}}/history?start={{startTimestamp}}&end={{endTimestamp}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"vehicles",
+						"{{vehicleId}}",
+						"history"
+					],
+					"query": [
+						{
+							"key": "start",
+							"value": "{{startTimestamp}}",
+							"description": "Start timestamp in Unix epoch format"
+						},
+						{
+							"key": "end",
+							"value": "{{endTimestamp}}",
+							"description": "End timestamp in Unix epoch format"
+						}
+					]
+				},
+				"description": "Get location history for a vehicle within a time range.\n\n**Parameters:**\n- `vehicleId`: The ID of the vehicle\n- `start`: Start timestamp in Unix epoch format (required)\n- `end`: End timestamp in Unix epoch format (required)\n\n**Response:**\n- Success: Returns array of vehicle locations within the time range\n- Missing parameters: Returns 400 with error message\n- Invalid timestamps: Returns 400 with error message"
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Generate current timestamp in seconds",
+					"const now = Math.floor(Date.now() / 1000);",
+					"// 10 minutes ago",
+					"const tenMinutesAgo = now - 600;",
+					"// Set collection variables",
+					"pm.collectionVariables.set('endTimestamp', now.toString());",
+					"pm.collectionVariables.set('startTimestamp', tenMinutesAgo.toString());",
+					"console.log('Timestamps updated: start=' + tenMinutesAgo + ', end=' + now);"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string",
+			"description": "Base URL of the API server"
+		},
+		{
+			"key": "vehicleId",
+			"value": "B5678ABC",
+			"type": "string",
+			"description": "Vehicle ID for testing (B1234XYZ, B5678ABC, or B9012DEF)"
+		},
+		{
+			"key": "startTimestamp",
+			"value": "",
+			"type": "string",
+			"description": "Start timestamp (auto-generated: 10 minutes ago)"
+		},
+		{
+			"key": "endTimestamp",
+			"value": "",
+			"type": "string",
+			"description": "End timestamp (auto-generated: now)"
+		}
+	]
+}
+
